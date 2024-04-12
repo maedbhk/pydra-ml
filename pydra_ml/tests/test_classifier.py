@@ -84,3 +84,7 @@ def test_regressor(tmpdir):
     assert results[0][1].output.score[0][0] < results[1][1].output.score[0][0]
     assert hasattr(results[2][1].output.model, "predict")
     assert isinstance(results[2][1].output.model.predict(np.ones((1, 10))), np.ndarray)
+
+
+if __name__ == "__main__":
+    test_classifier(tmpdir="/om2/user/maedbh/bin/.cache")

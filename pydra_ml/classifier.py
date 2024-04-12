@@ -100,6 +100,7 @@ def gen_workflow(inputs, cache_dir=None, cache_locations=None):
             split_index=wf.gensplit.lzout.split_indices,
             clf_info=wf.lzin.clf_info,
             permute=wf.lzin.permute,
+            oversample=wf.lzin.oversample,
         )
     )
     wf.fit_clf.split(split_index=wf.gensplit.lzout.split_indices)
@@ -150,6 +151,7 @@ def gen_workflow(inputs, cache_dir=None, cache_locations=None):
             y=wf.readcsv.lzout.Y,
             clf_info=wf.lzin.clf_info,
             permute=wf.lzin.permute,
+            oversample=wf.lzin.oversample,
         )
     )
     wf.set_output(

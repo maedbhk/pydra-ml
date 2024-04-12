@@ -61,7 +61,9 @@ def gen_splits(n_splits, test_size, X, Y, groups=None, random_state=0):
     return train_test_splits, split_indices
 
 
-def train_test_kernel(X, y, train_test_split, split_index, clf_info, permute):
+def train_test_kernel(
+    X, y, train_test_split, split_index, clf_info, permute, oversample
+):
     """Core model fitting and predicting function
 
     :param X: Input features
@@ -70,6 +72,7 @@ def train_test_kernel(X, y, train_test_split, split_index, clf_info, permute):
     :param split_index: which index to use
     :param clf_info: how to construct the classifier
     :param permute: whether to run it in permuted mode or not
+    :param oversample: whether to oversample the minority class
     :return: outputs, trained classifier with sample indices
     """
     import numpy as np
@@ -101,20 +104,50 @@ def train_test_kernel(X, y, train_test_split, split_index, clf_info, permute):
         pipe = Pipeline([("std", StandardScaler()), (clf_info[1], clf)])
 
     train_index, test_index = train_test_split[split_index]
+
     y = y.ravel()
     if type(X[0][0]) is str:
         # it's loaded as bytes, so we need to decode as utf-8
         X = np.array([str.encode(n[0]).decode("utf-8") for n in X])
     if permute:
-        pipe.fit(X[train_index], y[np.random.permutation(train_index)])
+        if oversample:
+            x_resample, y_resample = oversample_minority_class(
+                X[train_index], y[np.random.permutation(train_index)]
+            )
+            pipe.fit(x_resample, y_resample)
+        else:
+            pipe.fit(X[train_index], y[np.random.permutation(train_index)])
     else:
-        pipe.fit(X[train_index], y[train_index])
+        if oversample:
+            x_resample, y_resample = oversample_minority_class(
+                X[train_index], y[train_index]
+            )
+            pipe.fit(x_resample, y_resample)
+        else:
+            pipe.fit(X[train_index], y[train_index])
     predicted = pipe.predict(X[test_index])
     try:
         predicted_proba = pipe.predict_proba(X[test_index])
     except AttributeError:
         predicted_proba = None
     return (y[test_index], predicted, predicted_proba), (pipe, train_index, test_index)
+
+
+def oversample_minority_class(X, y):
+    """Oversample the minority class using SMOTE
+    :param X: Input features
+    :param y: Target variables
+    """
+    from imblearn.over_sampling import SMOTE, RandomOverSampler
+
+    try:
+        sm = SMOTE(random_state=42, sampling_strategy="auto")
+        X_resample, y_resample = sm.fit_resample(X, y)
+    except Exception:
+        ros = RandomOverSampler(random_state=42, sampling_strategy="auto")
+        X_resample, y_resample = ros.fit_resample(X, y)
+
+    return X_resample, y_resample
 
 
 def calc_metric(output, metrics):
@@ -260,13 +293,14 @@ def get_shap(X, permute, model, gen_shap=False, nsamples="auto", l1_reg="aic"):
     return shaps
 
 
-def create_model(X, y, clf_info, permute):
+def create_model(X, y, clf_info, permute, oversample):
     """Train a model with all the data
 
     :param X: Input features
     :param y: Target variables
     :param clf_info: how to construct the classifier
     :param permute: whether to run it in permuted mode or not
+    :param oversample: whether to oversample the minority class
     :return: training error, classifier
     """
     import numpy as np
@@ -299,8 +333,19 @@ def create_model(X, y, clf_info, permute):
 
     y = y.ravel()
     if permute:
-        pipe.fit(X, y[np.random.permutation(range(len(y)))])
+        if oversample:
+            x_resample, y_resample = oversample_minority_class(
+                X, y[np.random.permutation(range(len(y)))]
+            )
+            pipe.fit(x_resample, y_resample)
+        else:
+            pipe.fit(X, y[np.random.permutation(range(len(y)))])
     else:
-        pipe.fit(X, y)
+        if oversample:
+            x_resample, y_resample = oversample_minority_class(X, y)
+            pipe.fit(x_resample, y_resample)
+        else:
+            pipe.fit(X, y)
+
     predicted = pipe.predict(X)
     return (y, predicted), pipe
